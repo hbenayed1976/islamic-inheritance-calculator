@@ -68,6 +68,22 @@ class HeritageCalculator:
                     heir.is_blocked = True
                     self.reasoning.append(f"  → {heir.name} محجوب بوجود الأخ الشقيق")
         
+        # Règle 4: بنت الابن bloquée par 2+ filles directes
+        num_daughters = sum(1 for h in self.heirs 
+                           if h.relation == "البنت" and not h.is_blocked)
+        if num_daughters >= 2:
+            for heir in self.heirs:
+                if heir.relation == "بنت_الابن":
+                    heir.is_blocked = True
+                    self.reasoning.append(f"  → {heir.name} محجوبة بوجود بنتين صلبيتين فأكثر")
+        
+        # Règle 5: بنت الابن bloquée par fils (الابن)
+        if "الابن" in relations:
+            for heir in self.heirs:
+                if heir.relation == "بنت_الابن":
+                    heir.is_blocked = True
+                    self.reasoning.append(f"  → {heir.name} محجوبة بوجود الابن")
+        
         if not any(h.is_blocked for h in self.heirs):
             self.reasoning.append("  ✓ لا توجد حالات حجب")
     
@@ -140,6 +156,7 @@ class HeritageCalculator:
         total_shares = Fraction(0, 1)
         has_children = any(h.relation in ["الابن", "البنت"] 
                           for h in self.heirs if not h.is_blocked)
+        has_sons = any(h.relation == "الابن" for h in self.heirs if not h.is_blocked)
         
         self.reasoning.append(f"\n📊 **حساب الفروض المقدرة:**")
         self.reasoning.append(f"  • هل يوجد فرع وارث؟ {'نعم' if has_children else 'لا'}")
@@ -183,6 +200,32 @@ class HeritageCalculator:
                     
                     heir.share = share
                     total_shares += share
+            
+            # Petite-fille (بنت الابن)
+            elif relation == "بنت_الابن":
+                num_daughters = sum(1 for h in self.heirs 
+                                   if h.relation == "البنت" and not h.is_blocked)
+                num_granddaughters = sum(1 for h in self.heirs 
+                                        if h.relation == "بنت_الابن" and not h.is_blocked)
+                
+                if has_sons == False:  # Pas de fils pour bloquer
+                    if num_daughters == 0:
+                        # Pas de filles directes, bint ibn hérite comme fille
+                        if num_granddaughters == 1:
+                            share = Fraction(1, 2)
+                            self.reasoning.append(f"  • بنت الابن الواحدة (لا بنت صلبية): {share}")
+                        else:
+                            share = Fraction(2, 3) / num_granddaughters
+                            self.reasoning.append(f"  • بنات الابن (لا بنت صلبية): {share} لكل واحدة")
+                        heir.share = share
+                        total_shares += share
+                    elif num_daughters == 1:
+                        # Une fille directe, bint ibn prend 1/6 (تكملة الثلثين)
+                        share = Fraction(1, 6) / num_granddaughters
+                        self.reasoning.append(f"  • بنت الابن (مع بنت واحدة صلبية): {share} (تكملة الثلثين)")
+                        heir.share = share
+                        total_shares += share
+                    # Si 2+ filles directes, bint ibn est bloquée (sera géré dans hijab)
             
             # Père
             elif relation == "الأب":
@@ -242,6 +285,24 @@ class HeritageCalculator:
                 son.share = unit_share * 2
             for daughter in daughters:
                 daughter.share = unit_share
+            return
+        
+        # بنت الابن مع ابن الابن (عصبة بالغير)
+        grandsons = [h for h in self.heirs if h.relation == "ابن_الابن" and not h.is_blocked]
+        granddaughters = [h for h in self.heirs 
+                         if h.relation == "بنت_الابن" and not h.is_blocked and h.share == 0]
+        
+        if grandsons or granddaughters:
+            total_units = len(grandsons) * 2 + len(granddaughters)
+            unit_share = remainder / total_units
+            
+            self.reasoning.append(f"  • بنت الابن مع ابن الابن: عصبة بالغير")
+            self.reasoning.append(f"  • القاعدة: للذكر مثل حظ الأنثيين")
+            
+            for grandson in grandsons:
+                grandson.share = unit_share * 2
+            for granddaughter in granddaughters:
+                granddaughter.share = unit_share
             return
         
         # Père hérite le reste (même s'il a déjà reçu 1/6 comme fard)
@@ -459,6 +520,8 @@ if __name__ == "__main__":
         "ترك زوجة وولدان وبنتان",
         "توفي عن زوجة وأب وأم",
         "ماتت عن زوج وأب وأم",
+        "ترك بنت ابن وزوجة",
+        "توفي عن بنت وبنت ابن",
     ]
     
     for i, test in enumerate(test_cases, 1):
