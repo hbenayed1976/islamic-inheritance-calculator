@@ -31,6 +31,7 @@ class RelationType(Enum):
     GRANDMOTHER = "الجدة"
     GRANDSON = "ابن_الابن"
     GRANDDAUGHTER = "بنت_الابن"
+    GRANDDAUGHTER_DAUGHTER = "بنت_البنت"
     BROTHER_FULL = "الأخ_الشقيق"
     SISTER_FULL = "الأخت_الشقيقة"
     BROTHER_PATERNAL = "الأخ_لأب"
@@ -125,12 +126,12 @@ class HeirDetector:
                 r'(اثنتان|اثنتين)\s*من\s*البنات',
                 r'بنتان',  # 2 filles
                 r'بنتين',  # 2 filles
-                r'\bوبنتا\b',  # وبنتا
-                r'\bوبنت\b',   # وبنت
-                r'و\s+بنتا\b',  # و بنتا (avec espace)
-                r'و\s+بنت\b',   # و بنت (avec espace)
-                r'\bبنتا\b',  # fille (accusatif)
-                r'(?<!بنت\s)\bبنت\b(?!\sابن)(?!\sالابن)',  # fille unique
+                r'\bوبنتا\b(?!\s+ابن)(?!\s+بنت)',  # وبنتا
+                r'\bوبنت\b(?!\s+ابن)(?!\s+بنت)',   # وبنت
+                r'و\s+بنتا\b(?!\s+ابن)(?!\s+بنت)',  # و بنتا (avec espace)
+                r'و\s+بنت\b(?!\s+ابن)(?!\s+بنت)',   # و بنت (avec espace)
+                r'\bبنتا\b(?!\s+ابن)(?!\s+بنت)',  # fille (accusatif)
+                r'(?<!بنت\s)\bبنت\b(?!\s+ابن)(?!\s+بنت)(?!\s+الابن)',  # fille unique
             ],
             
             # Patterns pour les frères
@@ -327,13 +328,19 @@ class HeirDetector:
                         Heir(name=f"البنت {i+1}", relation="البنت", gender="أنثى", count=1)
                     )
         
-        # 4. Petite-fille (بنت ابن)
-        if re.search(r'بنت\s+ابن', text_lower) and 'بنت' not in text_lower.replace('بنت ابن', ''):
+        # 4. Petite-fille (بنت ابن) et bint bint (بنت بنت)
+        if re.search(r'بنت\s+ابن', text_lower):
             self.detected_heirs.append(
                 Heir(name="بنت الابن", relation="بنت_الابن", gender="أنثى", count=1)
             )
         
-        # 5. Grand-père (الجد)
+        # 5. Bint bint (بنت بنت) - petite-fille par la fille
+        if re.search(r'بنت\s+بنت', text_lower):
+            self.detected_heirs.append(
+                Heir(name="بنت البنت", relation="بنت_البنت", gender="أنثى", count=1)
+            )
+        
+        # 6. Grand-père (الجد)
         grandfather_patterns = [
             r'\bجد\b',      # جد
             r'\bجدا\b',     # جدا
@@ -349,7 +356,7 @@ class HeirDetector:
                 Heir(name="الجد", relation="الجد", gender="ذكر", count=1)
             )
         
-        # 6. Père
+        # 7. Père
         father_patterns = [
             r'\bأب\b',      # أب
             r'\bأبا\b',     # أبا
@@ -366,7 +373,7 @@ class HeirDetector:
                     Heir(name="الأب", relation="الأب", gender="ذكر", count=1)
                 )
         
-        # 7. Mère
+        # 8. Mère
         mother_patterns = [
             r'\bأم\b',      # أم
             r'\bأما\b',     # أما
@@ -382,7 +389,7 @@ class HeirDetector:
                 Heir(name="الأم", relation="الأم", gender="أنثى", count=1)
             )
         
-        # 8. Frères germains
+        # 9. Frères germains
         brothers_full_count = self.detect_brothers(text, 'full')
         if brothers_full_count > 0:
             if brothers_full_count == 1:
@@ -395,7 +402,7 @@ class HeirDetector:
                         Heir(name=f"الأخ الشقيق {i+1}", relation="الأخ_الشقيق", gender="ذكر", count=1)
                     )
         
-        # 9. Sœurs germaines
+        # 10. Sœurs germaines
         sisters_full_count = self.detect_sisters(text, 'full')
         if sisters_full_count > 0:
             if sisters_full_count == 1:
@@ -408,7 +415,7 @@ class HeirDetector:
                         Heir(name=f"الأخت الشقيقة {i+1}", relation="الأخت_الشقيقة", gender="أنثى", count=1)
                     )
         
-        # 10. Frères/sœurs pour père
+        # 11. Frères/sœurs pour père
         if re.search(r'أخ\s+لأب', text_lower):
             brothers_paternal_count = self.extract_number_from_text(text_lower, 'أخ لأب')
             if brothers_paternal_count >= 1:
@@ -468,10 +475,12 @@ if __name__ == "__main__":
         "توفي عن زوجة وأب وأم",
         "ماتت عن زوج وأب وأم",
         "ترك زوجة وثلاثة إخوة أشقاء",
+        "توفي عن بنت ابن",
+        "ترك بنت بنت",
     ]
     
     for i, test in enumerate(test_cases, 1):
-        print(f"\n📝 TEST {i}: {test}")
+        print(f"\n🔎 TEST {i}: {test}")
         print("-"*70)
         
         heirs = detector.detect_heirs(test)
