@@ -154,12 +154,13 @@ class HeritageCalculator:
             return self.solve_umariyyatayn()
         
         total_shares = Fraction(0, 1)
-        has_children = any(h.relation in ["الابن", "البنت"] 
+        # الفرع الوارث يشمل: الابن، البنت، ابن الابن، بنت الابن
+        has_children = any(h.relation in ["الابن", "البنت", "ابن_الابن", "بنت_الابن"] 
                           for h in self.heirs if not h.is_blocked)
         has_sons = any(h.relation == "الابن" for h in self.heirs if not h.is_blocked)
         
         self.reasoning.append(f"\n📊 **حساب الفروض المقدرة:**")
-        self.reasoning.append(f"  • هل يوجد فرع وارث؟ {'نعم' if has_children else 'لا'}")
+        self.reasoning.append(f"  • هل يوجد فرع وارث (ابن، بنت، ابن ابن، بنت ابن)؟ {'نعم' if has_children else 'لا'}")
         
         for heir in self.heirs:
             if heir.is_blocked:
