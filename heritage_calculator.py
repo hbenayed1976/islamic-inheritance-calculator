@@ -154,13 +154,19 @@ class HeritageCalculator:
             return self.solve_umariyyatayn()
         
         total_shares = Fraction(0, 1)
-        # الفرع الوارث يشمل: الابن، البنت، ابن الابن، بنت الابن
+        
+        # الفرع الوارث يشمل: الابن، البنت، ابن الابن، بنت الابن (غير المحجوبين)
         has_children = any(h.relation in ["الابن", "البنت", "ابن_الابن", "بنت_الابن"] 
                           for h in self.heirs if not h.is_blocked)
         has_sons = any(h.relation == "الابن" for h in self.heirs if not h.is_blocked)
         
         self.reasoning.append(f"\n📊 **حساب الفروض المقدرة:**")
-        self.reasoning.append(f"  • هل يوجد فرع وارث (ابن، بنت، ابن ابن، بنت ابن)؟ {'نعم' if has_children else 'لا'}")
+        self.reasoning.append(f"  • هل يوجد فرع وارث (غير محجوب)؟ {'نعم' if has_children else 'لا'}")
+        if has_children:
+            children_list = [h.name for h in self.heirs 
+                           if h.relation in ["الابن", "البنت", "ابن_الابن", "بنت_الابن"] 
+                           and not h.is_blocked]
+            self.reasoning.append(f"    الفروع الوارثة: {', '.join(children_list)}")
         
         for heir in self.heirs:
             if heir.is_blocked:
@@ -173,8 +179,12 @@ class HeritageCalculator:
                 share = Fraction(1, 8) if has_children else Fraction(1, 4)
                 heir.share = share
                 total_shares += share
-                verse = "فَإِن كَانَ لَكُمْ وَلَدٌ فَلَهُنَّ الثُّمُنُ" if has_children else "وَلَهُنَّ الرُّبُعُ"
-                self.reasoning.append(f"  • الزوجة: {share}")
+                if has_children:
+                    verse = "فَإِن كَانَ لَكُمْ وَلَدٌ فَلَهُنَّ الثُّمُنُ"
+                    self.reasoning.append(f"  • الزوجة: {share} (الثمن لوجود فرع وارث)")
+                else:
+                    verse = "وَلَهُنَّ الرُّبُعُ"
+                    self.reasoning.append(f"  • الزوجة: {share} (الربع لعدم الفرع الوارث)")
                 self.reasoning.append(f"    الدليل: {verse} (النساء: 12)")
             
             # Époux
@@ -182,7 +192,10 @@ class HeritageCalculator:
                 share = Fraction(1, 4) if has_children else Fraction(1, 2)
                 heir.share = share
                 total_shares += share
-                self.reasoning.append(f"  • الزوج: {share}")
+                if has_children:
+                    self.reasoning.append(f"  • الزوج: {share} (الربع لوجود فرع وارث)")
+                else:
+                    self.reasoning.append(f"  • الزوج: {share} (النصف لعدم الفرع الوارث)")
             
             # Fille(s)
             elif relation == "البنت":
